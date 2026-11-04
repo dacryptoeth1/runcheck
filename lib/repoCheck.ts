@@ -29,7 +29,11 @@ function apiUrl({ owner, repo }: GitHubRepo, path = ""): string {
 }
 
 function getFromApi(url: string, signal: AbortSignal): Promise<Response> {
-  return fetch(url, { headers: API_HEADERS, signal, cache: "no-store" });
+  const token = process.env.GITHUB_TOKEN?.trim();
+  const headers = token
+    ? { ...API_HEADERS, Authorization: `Bearer ${token}` }
+    : API_HEADERS;
+  return fetch(url, { headers, signal, cache: "no-store" });
 }
 
 function isRateLimited(response: Response): boolean {
@@ -54,6 +58,9 @@ function rateLimitDetail(headers: Headers): string {
 }
 
 function repoErrorDetail(response: Response): string {
+  if (response.status === 401) {
+    return "GitHub rejected the GITHUB_TOKEN setting. Check or remove it.";
+  }
   if (response.status === 404) {
     return "Repo not found, or it's private. GitHub returns 404 for both.";
   }

@@ -17,6 +17,16 @@ Then open [http://localhost:3000](http://localhost:3000).
 
 For a production build, run `npm run build`, then `npm start`.
 
+### Optional: GitHub token
+
+A token raises GitHub's rate limit from 60 to 5,000 requests per hour. To use one, create `.env.local` in the project root and restart the server:
+
+```bash
+GITHUB_TOKEN=your_token_here
+```
+
+Use a [fine-grained token](https://github.com/settings/personal-access-tokens/new) with access to public repositories only. A token with private repo access could reveal that those repos exist. `.env.local` is ignored by git, so the token isn't committed.
+
 ## API
 
 `POST /api/verify`
@@ -63,8 +73,8 @@ The check calls `GET https://api.github.com/repos/{owner}/{repo}` and passes if 
 
 - The check has a 10 second limit, which covers both the repo and README requests.
 - It fails with a specific message if the repo is not found or private, if GitHub's rate limit is reached, or if GitHub can't be reached.
-- GitHub returns `404` for private repos when there's no token, so those two cases share one message.
-- Requests aren't authenticated, so GitHub allows 60 per hour per IP address. Each verification uses 2.
+- GitHub returns `404` for private repos the request can't access, so those two cases share one message.
+- Each verification uses 2 GitHub API requests. Without a token, GitHub allows 60 per hour per IP address.
 - It also fetches the README and keeps the text in memory for the current request, ready for `readme_matches`. The text isn't stored or returned. A missing README doesn't fail the check.
 
 ## How `demo_loads` works
