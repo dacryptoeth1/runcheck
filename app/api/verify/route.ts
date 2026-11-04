@@ -1,38 +1,38 @@
+import { checkDemoLoads, demoUrlError } from "@/lib/demoCheck";
 import type { Check, Verdict, VerifyError } from "@/lib/verdict";
 
-// Fixed sample data, including one failure so both card states are visible.
-const MOCK_CHECKS: Check[] = [
+// Fixed sample data until these checks run for real.
+const MOCK_BUILD_CHECKS: Check[] = [
   {
     id: "repo_clones",
     label: "Repo clones",
+    mock: true,
     status: "pass",
-    detail: "Sample result: repository cloned.",
+    detail: "Repository cloned.",
   },
   {
     id: "installs",
     label: "Dependencies install",
+    mock: true,
     status: "pass",
-    detail: "Sample result: dependencies installed.",
+    detail: "Dependencies installed.",
   },
   {
     id: "builds",
     label: "Project builds",
+    mock: true,
     status: "pass",
-    detail: "Sample result: build finished without errors.",
-  },
-  {
-    id: "demo_loads",
-    label: "Demo loads",
-    status: "pass",
-    detail: "Sample result: demo URL responded with 200.",
-  },
-  {
-    id: "readme_matches",
-    label: "README matches",
-    status: "fail",
-    detail: "Sample result: README describes a feature the demo doesn't show.",
+    detail: "Build finished without errors.",
   },
 ];
+
+const MOCK_README_CHECK: Check = {
+  id: "readme_matches",
+  label: "README matches",
+  mock: true,
+  status: "fail",
+  detail: "README describes a feature the demo doesn't show.",
+};
 
 function parseUrl(value: unknown): URL | null {
   if (typeof value !== "string") return null;
@@ -49,10 +49,6 @@ function isGitHubRepoUrl(url: URL): boolean {
     url.hostname === "github.com" &&
     /^\/[\w.-]+\/[\w.-]+\/?$/.test(url.pathname)
   );
-}
-
-function isWebUrl(url: URL): boolean {
-  return url.protocol === "https:" || url.protocol === "http:";
 }
 
 function badRequest(error: string) {
@@ -75,18 +71,25 @@ export async function POST(request: Request) {
   }
 
   const demoUrl = parseUrl(body?.demoUrl);
-  if (!demoUrl || !isWebUrl(demoUrl)) {
+  if (!demoUrl) {
     return badRequest("Enter a demo URL starting with http:// or https://.");
   }
+  const demoError = demoUrlError(demoUrl);
+  if (demoError) {
+    return badRequest(demoError);
+  }
+
+  const checks: Check[] = [
+    ...MOCK_BUILD_CHECKS,
+    await checkDemoLoads(demoUrl),
+    MOCK_README_CHECK,
+  ];
 
   const result: Verdict = {
-    mock: true,
-    verdict: MOCK_CHECKS.every((check) => check.status === "pass")
-      ? "pass"
-      : "fail",
+    verdict: checks.every((check) => check.status === "pass") ? "pass" : "fail",
     repoUrl: repoUrl.href,
     demoUrl: demoUrl.href,
-    checks: MOCK_CHECKS,
+    checks,
   };
 
   return Response.json(result);

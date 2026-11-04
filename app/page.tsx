@@ -88,12 +88,6 @@ export default function Home() {
               </span>
             </div>
 
-            {result.mock && (
-              <p className={styles.mockNotice}>
-                Sample data: these checks didn&apos;t run against your project.
-              </p>
-            )}
-
             <ul className={styles.checks}>
               {result.checks.map((check) => (
                 <li
@@ -101,7 +95,12 @@ export default function Home() {
                   className={`${styles.check} ${styles[check.status]}`}
                 >
                   <div>
-                    <h3>{check.label}</h3>
+                    <h3>
+                      {check.label}
+                      {check.mock && (
+                        <span className={styles.sampleTag}>Sample data</span>
+                      )}
+                    </h3>
                     <p>{check.detail}</p>
                   </div>
                   <span className={styles.badge}>

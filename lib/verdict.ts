@@ -10,13 +10,13 @@ export type Status = "pass" | "fail";
 export type Check = {
   id: CheckId;
   label: string;
+  /** True if this is fixed sample data rather than a real result. */
+  mock: boolean;
   status: Status;
   detail: string;
 };
 
 export type Verdict = {
-  /** True until the checks run for real. */
-  mock: boolean;
   verdict: Status;
   repoUrl: string;
   demoUrl: string;

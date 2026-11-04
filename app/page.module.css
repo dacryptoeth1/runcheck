@@ -90,8 +90,7 @@
   font-size: 22px;
 }
 
-.summaryCount,
-.mockNotice {
+.summaryCount {
   font-size: 14px;
   color: var(--muted);
 }
@@ -116,6 +115,10 @@
 }
 
 .check h3 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
   font-size: 15px;
   margin-bottom: 2px;
 }
@@ -123,6 +126,15 @@
 .check p {
   font-size: 14px;
   color: var(--muted);
+}
+
+.sampleTag {
+  padding: 1px 7px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
 }
 
 .badge {
