@@ -1,15 +1,9 @@
 import { checkDemoLoads, demoUrlError } from "@/lib/demoCheck";
+import { checkRepo, parseGitHubRepo } from "@/lib/repoCheck";
 import type { Check, Verdict, VerifyError } from "@/lib/verdict";
 
 // Fixed sample data until these checks run for real.
 const MOCK_BUILD_CHECKS: Check[] = [
-  {
-    id: "repo_clones",
-    label: "Repo clones",
-    mock: true,
-    status: "pass",
-    detail: "Repository cloned.",
-  },
   {
     id: "installs",
     label: "Dependencies install",
@@ -43,14 +37,6 @@ function parseUrl(value: unknown): URL | null {
   }
 }
 
-function isGitHubRepoUrl(url: URL): boolean {
-  return (
-    url.protocol === "https:" &&
-    url.hostname === "github.com" &&
-    /^\/[\w.-]+\/[\w.-]+\/?$/.test(url.pathname)
-  );
-}
-
 function badRequest(error: string) {
   return Response.json({ error } satisfies VerifyError, { status: 400 });
 }
@@ -64,7 +50,8 @@ export async function POST(request: Request) {
   }
 
   const repoUrl = parseUrl(body?.repoUrl);
-  if (!repoUrl || !isGitHubRepoUrl(repoUrl)) {
+  const repo = repoUrl && parseGitHubRepo(repoUrl);
+  if (!repoUrl || !repo) {
     return badRequest(
       "Enter a GitHub repo URL like https://github.com/owner/repo.",
     );
@@ -79,9 +66,17 @@ export async function POST(request: Request) {
     return badRequest(demoError);
   }
 
+  // repoResult.readme holds the README text for the real readme_matches check.
+  // It stays on the server and isn't included in the response.
+  const [repoResult, demoCheck] = await Promise.all([
+    checkRepo(repo),
+    checkDemoLoads(demoUrl),
+  ]);
+
   const checks: Check[] = [
+    repoResult.check,
     ...MOCK_BUILD_CHECKS,
-    await checkDemoLoads(demoUrl),
+    demoCheck,
     MOCK_README_CHECK,
   ];
 

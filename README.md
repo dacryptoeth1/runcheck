@@ -2,7 +2,7 @@
 
 Check that a hackathon project runs and matches its demo. Enter a GitHub repo URL and a demo URL to get a pass/fail result for each check.
 
-> **Only `demo_loads` is real so far.** It requests the demo URL. The other four checks return fixed sample results for every project and are labeled "Sample data". Nothing is cloned or built yet.
+> **Only `repo_clones` and `demo_loads` are real so far.** `repo_clones` looks the repo up through the GitHub API, and `demo_loads` requests the demo URL. The other three checks return fixed sample results for every project and are labeled "Sample data". Nothing is cloned or built yet.
 
 ## Run it
 
@@ -38,16 +38,16 @@ The response looks like this (`checks` is shortened to two entries):
     {
       "id": "repo_clones",
       "label": "Repo clones",
-      "mock": true,
-      "status": "pass",
-      "detail": "Repository cloned."
-    },
-    {
-      "id": "demo_loads",
-      "label": "Demo loads",
       "mock": false,
       "status": "pass",
-      "detail": "HTTP 200 in 342 ms."
+      "detail": "Public repo, not cloned yet. Default branch: canary. Last push: 2026-11-04."
+    },
+    {
+      "id": "installs",
+      "label": "Dependencies install",
+      "mock": true,
+      "status": "pass",
+      "detail": "Dependencies installed."
     }
   ]
 }
@@ -56,6 +56,16 @@ The response looks like this (`checks` is shortened to two entries):
 `verdict` is `pass` only if every check passes, including the sample ones. The check IDs are `repo_clones`, `installs`, `builds`, `demo_loads` and `readme_matches`. `mock` is `true` for sample results.
 
 Invalid input returns a `400` with `{ "error": "..." }`.
+
+## How `repo_clones` works
+
+The check calls `GET https://api.github.com/repos/{owner}/{repo}` and passes if the repo exists and is public. It doesn't run `git clone` yet.
+
+- The check has a 10 second limit, which covers both the repo and README requests.
+- It fails with a specific message if the repo is not found or private, if GitHub's rate limit is reached, or if GitHub can't be reached.
+- GitHub returns `404` for private repos when there's no token, so those two cases share one message.
+- Requests aren't authenticated, so GitHub allows 60 per hour per IP address. Each verification uses 2.
+- It also fetches the README and keeps the text in memory for the current request, ready for `readme_matches`. The text isn't stored or returned. A missing README doesn't fail the check.
 
 ## How `demo_loads` works
 
@@ -72,5 +82,6 @@ The check sends a `GET` to the demo URL and passes only if the final status is 2
 | --- | --- |
 | `app/page.tsx` | Form and result cards |
 | `app/api/verify/route.ts` | Input validation and mock results |
+| `lib/repoCheck.ts` | Real `repo_clones` check and README fetch |
 | `lib/demoCheck.ts` | Real `demo_loads` check and address blocking |
 | `lib/verdict.ts` | Types shared by the page and the API |
