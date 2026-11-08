@@ -60,9 +60,19 @@
 }
 
 .field input:focus-visible,
-.form button:focus-visible {
+.form button:focus-visible,
+.logToggle:focus-visible {
   outline: 2px solid var(--foreground);
   outline-offset: 2px;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .error {
@@ -78,22 +88,98 @@
   gap: 16px;
 }
 
-.summary {
+/* Status panel: progress bar and final verdict */
+
+.status {
+  --bar-color: var(--foreground);
   display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 4px 16px;
+  flex-direction: column;
+  gap: 14px;
 }
 
-.summary h2 {
-  font-size: 22px;
+.status.verified {
+  --bar-color: var(--pass);
+}
+
+.status.notVerified {
+  --bar-color: var(--fail);
+}
+
+/* Reserves the verdict's height so the cards don't jump when it appears. */
+.statusSlot {
+  min-height: 58px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
 }
 
 .summaryCount {
   font-size: 14px;
   color: var(--muted);
 }
+
+.verdict {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px 10px 14px;
+  border-radius: 999px;
+  animation: verdict-in 520ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+.verdict h2 {
+  font-size: 24px;
+  letter-spacing: -0.01em;
+}
+
+.verdict .icon {
+  width: 28px;
+  height: 28px;
+}
+
+.verified .verdict {
+  color: var(--pass);
+  background: var(--pass-bg);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--pass) 45%, transparent),
+    0 0 22px color-mix(in srgb, var(--pass) 28%, transparent);
+  animation:
+    verdict-in 520ms cubic-bezier(0.2, 1.4, 0.4, 1) both,
+    verdict-glow 2600ms ease-in-out 520ms 3;
+}
+
+.notVerified .verdict {
+  color: var(--fail);
+  background: var(--fail-bg);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--fail) 45%, transparent);
+}
+
+.progressTrack {
+  height: 6px;
+  overflow: hidden;
+  background: var(--border);
+  border-radius: 999px;
+}
+
+.progressFill {
+  width: 100%;
+  height: 100%;
+  background: var(--bar-color);
+  border-radius: 999px;
+  transform-origin: left;
+  transition:
+    transform 340ms ease-out,
+    background-color 400ms ease;
+}
+
+.progressFill.indeterminate {
+  width: 35%;
+  opacity: 0.7;
+  animation: progress-slide 1500ms ease-in-out infinite;
+}
+
+/* Check cards */
 
 .checks {
   list-style: none;
@@ -103,22 +189,31 @@
 }
 
 .check {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
   padding: 14px 16px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-left-width: 4px;
   border-radius: 8px;
+  transition: border-left-color 400ms ease;
+}
+
+.checkInner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.resolved {
+  animation: fade-slide-in 420ms ease-out both;
+}
+
+.checkBody {
+  flex: 1;
+  min-width: 0;
 }
 
 .check h3 {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 2px 8px;
   font-size: 15px;
   margin-bottom: 2px;
 }
@@ -128,35 +223,39 @@
   color: var(--muted);
 }
 
-.checkBody {
-  flex: 1;
-  min-width: 0;
-}
-
-.log {
-  margin-top: 8px;
-  font-size: 13px;
+.pending h3 {
   color: var(--muted);
 }
 
-.log summary {
-  cursor: pointer;
+.skeleton {
+  width: 62%;
+  height: 10px;
+  margin-top: 8px;
+  background: var(--border);
+  border-radius: 999px;
+  animation: pulse 1400ms ease-in-out infinite;
 }
 
-.log pre {
-  margin-top: 6px;
-  padding: 8px 10px;
-  overflow-x: auto;
-  font-size: 12px;
-  line-height: 1.5;
-  background: var(--background);
-  border: 1px solid var(--border);
-  border-radius: 6px;
+.pendingDot {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  background: var(--border);
+  border-radius: 50%;
+  animation: pulse 1400ms ease-in-out infinite;
+}
+
+.pending:nth-child(even) .skeleton,
+.pending:nth-child(even) .pendingDot {
+  animation-delay: 350ms;
 }
 
 .badge {
   flex-shrink: 0;
-  padding: 3px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px 3px 6px;
   font-size: 13px;
   font-weight: 600;
   border-radius: 999px;
@@ -187,4 +286,167 @@
 .warning .badge {
   color: var(--warning);
   background: var(--warning-bg);
+}
+
+/* Status icons. The resting styles are the finished state. */
+
+.icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.iconRing {
+  stroke-width: 1.2;
+  opacity: 0.45;
+  transform-origin: center;
+  animation: icon-ring-in 320ms ease-out both;
+}
+
+.iconMark {
+  stroke-width: 1.8;
+  animation: icon-draw 340ms ease-out 140ms both;
+}
+
+/* Log sections */
+
+.log {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.logToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.chevron {
+  width: 10px;
+  height: 10px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 240ms ease;
+}
+
+.logToggle[aria-expanded="true"] .chevron {
+  transform: rotate(90deg);
+}
+
+/* Hidden with visibility too, so a closed log isn't read by screen readers. */
+.logPanel {
+  display: grid;
+  grid-template-rows: 0fr;
+  visibility: hidden;
+  transition:
+    grid-template-rows 280ms ease,
+    visibility 0s linear 280ms;
+}
+
+.logPanelOpen {
+  grid-template-rows: 1fr;
+  visibility: visible;
+  transition:
+    grid-template-rows 280ms ease,
+    visibility 0s;
+}
+
+.logPanelInner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.log pre {
+  margin-top: 6px;
+  padding: 8px 10px;
+  overflow-x: auto;
+  font-size: 12px;
+  line-height: 1.5;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+@keyframes fade-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@keyframes progress-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+
+@keyframes verdict-in {
+  from {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+}
+
+@keyframes verdict-glow {
+  50% {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--pass) 60%, transparent),
+      0 0 34px color-mix(in srgb, var(--pass) 42%, transparent);
+  }
+}
+
+@keyframes icon-ring-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+
+@keyframes icon-draw {
+  from {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .main *,
+  .main *::before,
+  .main *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  /* Without its movement, the waiting bar is a static dim bar. */
+  .progressFill.indeterminate {
+    width: 100%;
+    opacity: 0.35;
+  }
 }
