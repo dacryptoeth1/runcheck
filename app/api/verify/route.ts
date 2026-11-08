@@ -1,17 +1,9 @@
-import { checkDemoLoads, demoUrlError } from "@/lib/demoCheck";
+import { checkDemoLoads, demoUrlError, fetchDemoPage } from "@/lib/demoCheck";
 import { admitVerification } from "@/lib/limits";
+import { checkReadmeMatches } from "@/lib/readmeCheck";
 import { checkRepo, parseGitHubRepo } from "@/lib/repoCheck";
 import { runSandboxChecks, SandboxUnavailableError } from "@/lib/sandboxCheck";
 import type { Check, Verdict, VerifyError } from "@/lib/verdict";
-
-// Fixed sample data until this check runs for real.
-const MOCK_README_CHECK: Check = {
-  id: "readme_matches",
-  label: "README matches",
-  mock: true,
-  status: "fail",
-  detail: "README describes a feature the demo doesn't show.",
-};
 
 function parseUrl(value: unknown): URL | null {
   if (typeof value !== "string") return null;
@@ -61,20 +53,19 @@ export async function POST(request: Request) {
     });
   }
 
-  // repoResult.readme holds the README text for the real readme_matches check.
-  // It stays on the server and isn't included in the response.
   try {
-    const [repoResult, sandboxChecks, demoCheck] = await Promise.all([
+    const [repoResult, sandboxChecks, demoCheck, demoPage] = await Promise.all([
       checkRepo(repo),
       runSandboxChecks(repo),
       checkDemoLoads(demoUrl),
+      fetchDemoPage(demoUrl),
     ]);
 
     const checks: Check[] = [
       repoResult.check,
       ...sandboxChecks,
       demoCheck,
-      MOCK_README_CHECK,
+      checkReadmeMatches(repoResult.readme, demoPage),
     ];
 
     const result: Verdict = {

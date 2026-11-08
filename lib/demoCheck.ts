@@ -6,6 +6,7 @@ import type { Check } from "@/lib/verdict";
 
 const TIMEOUT_MS = 10_000;
 const MAX_REDIRECTS = 5;
+const MAX_HTML_BYTES = 2_000_000;
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
 const blockedAddresses = new net.BlockList();
@@ -89,9 +90,18 @@ const publicOnlyLookup: net.LookupFunction = (hostname, options, callback) => {
   });
 };
 
-type HopResponse = { status: number; location?: string };
+type HopResponse = {
+  status: number;
+  location?: string;
+  /** The HTML, if it was requested and this is a 2xx HTML response. */
+  html?: string;
+};
 
-function requestHop(url: URL, signal: AbortSignal): Promise<HopResponse> {
+function requestHop(
+  url: URL,
+  signal: AbortSignal,
+  readHtml: boolean,
+): Promise<HopResponse> {
   return new Promise((resolve, reject) => {
     const client = url.protocol === "https:" ? https : http;
     const request = client.request(
@@ -104,12 +114,35 @@ function requestHop(url: URL, signal: AbortSignal): Promise<HopResponse> {
         headers: { "User-Agent": "runcheck", Accept: "text/html,*/*" },
       },
       (response) => {
-        resolve({
+        const hop: HopResponse = {
           status: response.statusCode ?? 0,
           location: response.headers.location,
+        };
+
+        const isHtml = /html/i.test(response.headers["content-type"] ?? "");
+        if (!readHtml || !isHtml || hop.status < 200 || hop.status >= 300) {
+          resolve(hop);
+          // Only the status matters, so don't download the body.
+          response.destroy();
+          return;
+        }
+
+        const chunks: Buffer[] = [];
+        let size = 0;
+        const finish = () =>
+          resolve({ ...hop, html: Buffer.concat(chunks).toString("utf8") });
+
+        response.on("data", (chunk: Buffer) => {
+          chunks.push(chunk);
+          size += chunk.length;
+          // A page larger than the cap is compared using only its first part.
+          if (size >= MAX_HTML_BYTES) {
+            finish();
+            response.destroy();
+          }
         });
-        // Only the status matters, so don't download the body.
-        response.destroy();
+        response.on("end", finish);
+        response.on("error", reject);
       },
     );
     request.on("error", reject);
@@ -117,9 +150,40 @@ function requestHop(url: URL, signal: AbortSignal): Promise<HopResponse> {
   });
 }
 
+class BlockedRedirectError extends Error {}
+class TooManyRedirectsError extends Error {}
+
+async function followRedirects(
+  demoUrl: URL,
+  signal: AbortSignal,
+  readHtml: boolean,
+): Promise<{ response: HopResponse; redirects: number }> {
+  let url = demoUrl;
+
+  for (let redirects = 0; redirects <= MAX_REDIRECTS; redirects++) {
+    // Every hop is re-checked, because a public URL can redirect to an internal one.
+    if (demoUrlError(url)) throw new BlockedRedirectError();
+
+    const response = await requestHop(url, signal, readHtml);
+
+    if (REDIRECT_STATUSES.has(response.status) && response.location) {
+      url = new URL(response.location, url);
+      continue;
+    }
+    return { response, redirects };
+  }
+  throw new TooManyRedirectsError();
+}
+
 function failureDetail(error: unknown, signal: AbortSignal): string {
   if (signal.aborted) {
     return `Timed out after ${TIMEOUT_MS / 1000} seconds.`;
+  }
+  if (error instanceof BlockedRedirectError) {
+    return "Blocked: a redirect points to an address that isn't allowed.";
+  }
+  if (error instanceof TooManyRedirectsError) {
+    return `Stopped after ${MAX_REDIRECTS} redirects.`;
   }
   if (error instanceof BlockedAddressError) {
     return "Blocked: the demo URL resolves to a private or internal address.";
@@ -144,37 +208,43 @@ export async function checkDemoLoads(demoUrl: URL): Promise<Check> {
 
   const signal = AbortSignal.timeout(TIMEOUT_MS);
   const startedAt = performance.now();
-  let url = demoUrl;
 
   try {
-    for (let redirects = 0; redirects <= MAX_REDIRECTS; redirects++) {
-      // Every hop is re-checked, because a public URL can redirect to an internal one.
-      if (demoUrlError(url)) {
-        return result(
-          "fail",
-          "Blocked: a redirect points to an address that isn't allowed.",
-        );
-      }
+    const {
+      response: { status },
+      redirects,
+    } = await followRedirects(demoUrl, signal, false);
 
-      const { status, location } = await requestHop(url, signal);
-
-      if (REDIRECT_STATUSES.has(status) && location) {
-        url = new URL(location, url);
-        continue;
-      }
-
-      const elapsed = Math.round(performance.now() - startedAt);
-      const via =
-        redirects > 0
-          ? ` after ${redirects} redirect${redirects === 1 ? "" : "s"}`
-          : "";
-      return result(
-        status >= 200 && status < 300 ? "pass" : "fail",
-        `HTTP ${status} in ${elapsed} ms${via}.`,
-      );
-    }
-    return result("fail", `Stopped after ${MAX_REDIRECTS} redirects.`);
+    const elapsed = Math.round(performance.now() - startedAt);
+    const via =
+      redirects > 0
+        ? ` after ${redirects} redirect${redirects === 1 ? "" : "s"}`
+        : "";
+    return result(
+      status >= 200 && status < 300 ? "pass" : "fail",
+      `HTTP ${status} in ${elapsed} ms${via}.`,
+    );
   } catch (error) {
     return result("fail", failureDetail(error, signal));
+  }
+}
+
+export type DemoPage = { html: string } | { error: string };
+
+/** Downloads the demo page's HTML, with the same protections as checkDemoLoads. */
+export async function fetchDemoPage(demoUrl: URL): Promise<DemoPage> {
+  const signal = AbortSignal.timeout(TIMEOUT_MS);
+
+  try {
+    const { response } = await followRedirects(demoUrl, signal, true);
+    if (response.status < 200 || response.status >= 300) {
+      return { error: `It returned HTTP ${response.status}.` };
+    }
+    if (response.html === undefined) {
+      return { error: "It isn't an HTML page." };
+    }
+    return { html: response.html };
+  } catch (error) {
+    return { error: failureDetail(error, signal) };
   }
 }

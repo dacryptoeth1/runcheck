@@ -2,7 +2,7 @@
 
 Check that a hackathon project runs and matches its demo. Enter a GitHub repo URL and a demo URL to get a pass/fail result for each check.
 
-> **Only `readme_matches` is still sample data.** It returns a fixed result for every project and is labeled "Sample data". Every other check is real.
+> **`readme_matches` is a keyword-based heuristic, not a perfect check.** It compares words, so it can't tell whether a demo really does what its README says. Every other check tests the project directly.
 
 ## Run it
 
@@ -66,7 +66,7 @@ The response looks like this (`checks` is shortened to two entries):
 }
 ```
 
-`verdict` is `pass` only if every check passes, including the sample one. The check IDs are `github_lookup`, `repo_clones`, `installs`, `builds`, `demo_loads` and `readme_matches`. `mock` is `true` for sample results. `log`, when present, holds the last 20 lines of a sandbox command's output.
+`verdict` is `pass` only if every check passes, and the page shows "Verified" only in that case. The check IDs are `github_lookup`, `repo_clones`, `installs`, `builds`, `demo_loads` and `readme_matches`. `mock` is always `false` now that every check is real. `log`, when present, holds the last 20 lines of a sandbox command's output.
 
 Invalid input returns a `400` with `{ "error": "..." }`. If Docker isn't available, the API returns a `503` with an error starting `Sandbox unavailable:` and no check results.
 
@@ -118,6 +118,17 @@ The check sends a `GET` to the demo URL and passes only if the final status is 2
 - Private and internal addresses are blocked, including `localhost`, `127.x`, `10.x`, `172.16.x`–`172.31.x`, `192.168.x`, `169.254.x` and their IPv6 equivalents.
 - The block also applies to every redirect and to the IP addresses a hostname resolves to, checked when the connection is made.
 
+## How `readme_matches` works
+
+This is a keyword-based heuristic, and the check's label and detail say so. It passes if at least 40% of the README's key terms appear on the demo page, and the detail lists the matched and missing terms.
+
+- Key terms come from the README's headings, bold text, list items under a features-style heading, and code-formatted names. Up to 30 are compared.
+- Common section titles such as "Installation" and code that wouldn't appear on a website, such as commands, file names and environment variables, are ignored.
+- A term matches if all of its words appear on the page, in any order and ignoring case. Common words such as "the" don't need to match.
+- The demo page is requested separately from `demo_loads`, with the same address blocking on every redirect and its own 10 second limit. Only the first 2 MB of HTML is read.
+- The check fails if there's no README, if no key terms are found, or if the demo page can't be read as HTML.
+- JavaScript isn't run, so a page that renders all of its content in the browser will usually fail. When the HTML has very little text, the detail says so. A page can also pass just by mentioning the right words.
+
 ## Project layout
 
 | Path | Purpose |
@@ -128,5 +139,6 @@ The check sends a `GET` to the demo URL and passes only if the final status is 2
 | `lib/sandboxCheck.ts` | Real `repo_clones`, `installs` and `builds` checks in Docker |
 | `lib/limits.ts` | Concurrency limit and per-IP rate limit |
 | `server.mjs` | Production server, which records each client's real IP address |
-| `lib/demoCheck.ts` | Real `demo_loads` check and address blocking |
+| `lib/demoCheck.ts` | Real `demo_loads` check, demo page fetch and address blocking |
+| `lib/readmeCheck.ts` | `readme_matches` keyword heuristic |
 | `lib/verdict.ts` | Types shared by the page and the API |

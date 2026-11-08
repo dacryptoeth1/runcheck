@@ -11,7 +11,7 @@ export type Status = "pass" | "fail";
 export type Check = {
   id: CheckId;
   label: string;
-  /** True if this is fixed sample data rather than a real result. */
+  /** True for fixed sample data. Every current check is real, so this is false. */
   mock: boolean;
   status: Status;
   detail: string;

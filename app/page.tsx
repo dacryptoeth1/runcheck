@@ -95,12 +95,7 @@ export default function Home() {
                   className={`${styles.check} ${styles[check.status]}`}
                 >
                   <div className={styles.checkBody}>
-                    <h3>
-                      {check.label}
-                      {check.mock && (
-                        <span className={styles.sampleTag}>Sample data</span>
-                      )}
-                    </h3>
+                    <h3>{check.label}</h3>
                     <p>{check.detail}</p>
                     {check.log && (
                       <details

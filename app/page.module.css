@@ -154,15 +154,6 @@
   border-radius: 6px;
 }
 
-.sampleTag {
-  padding: 1px 7px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--muted);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-}
-
 .badge {
   flex-shrink: 0;
   padding: 3px 10px;
