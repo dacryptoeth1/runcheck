@@ -39,3 +39,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# demo video
+/runcheck-demo.mp4
+/runcheck-demo.webm
+/runcheck-demo-voiced.mp4
