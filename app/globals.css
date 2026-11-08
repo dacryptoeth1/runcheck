@@ -8,6 +8,8 @@
   --pass-bg: #e3f4e9;
   --fail: #b3261e;
   --fail-bg: #fbe9e7;
+  --warning: #805400;
+  --warning-bg: #fdf3dc;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -21,6 +23,8 @@
     --pass-bg: #12301f;
     --fail: #ff9d94;
     --fail-bg: #3a1614;
+    --warning: #f2c66d;
+    --warning-bg: #33270f;
   }
 }
 

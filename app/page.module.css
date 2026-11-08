@@ -179,3 +179,12 @@
   color: var(--fail);
   background: var(--fail-bg);
 }
+
+.warning {
+  border-left-color: var(--warning);
+}
+
+.warning .badge {
+  color: var(--warning);
+  background: var(--warning-bg);
+}

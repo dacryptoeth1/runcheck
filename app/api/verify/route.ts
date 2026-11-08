@@ -69,7 +69,9 @@ export async function POST(request: Request) {
     ];
 
     const result: Verdict = {
-      verdict: checks.every((check) => check.status === "pass")
+      verdict: checks.every(
+        (check) => check.advisory || check.status === "pass",
+      )
         ? "pass"
         : "fail",
       repoUrl: repoUrl.href,

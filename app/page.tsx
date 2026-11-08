@@ -1,8 +1,14 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import type { Verdict } from "@/lib/verdict";
+import type { CheckStatus, Verdict } from "@/lib/verdict";
 import styles from "./page.module.css";
+
+const BADGE_TEXT: Record<CheckStatus, string> = {
+  pass: "Pass",
+  fail: "Fail",
+  warning: "Warning",
+};
 
 export default function Home() {
   const [repoUrl, setRepoUrl] = useState("");
@@ -35,6 +41,8 @@ export default function Home() {
       setLoading(false);
     }
   }
+
+  const requiredChecks = result?.checks.filter((c) => !c.advisory) ?? [];
 
   return (
     <main className={styles.main}>
@@ -83,8 +91,8 @@ export default function Home() {
             <div className={styles.summary}>
               <h2>{result.verdict === "pass" ? "Verified" : "Not verified"}</h2>
               <span className={styles.summaryCount}>
-                {result.checks.filter((c) => c.status === "pass").length} of{" "}
-                {result.checks.length} checks passed
+                {requiredChecks.filter((c) => c.status === "pass").length} of{" "}
+                {requiredChecks.length} required checks passed
               </span>
             </div>
 
@@ -108,7 +116,7 @@ export default function Home() {
                     )}
                   </div>
                   <span className={styles.badge}>
-                    {check.status === "pass" ? "Pass" : "Fail"}
+                    {BADGE_TEXT[check.status]}
                   </span>
                 </li>
               ))}

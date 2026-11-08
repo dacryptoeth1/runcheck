@@ -2,7 +2,7 @@
 
 Check that a hackathon project runs and matches its demo. Enter a GitHub repo URL and a demo URL to get a pass/fail result for each check.
 
-> **`readme_matches` is a keyword-based heuristic, not a perfect check.** It compares words, so it can't tell whether a demo really does what its README says. Every other check tests the project directly.
+> **`readme_matches` is an advisory keyword-based heuristic, not a perfect check.** It compares words, so it can't tell whether a demo really does what its README says. It shows a pass or a warning and doesn't affect the verdict. Every other check tests the project directly and is required.
 
 ## Run it
 
@@ -66,7 +66,7 @@ The response looks like this (`checks` is shortened to two entries):
 }
 ```
 
-`verdict` is `pass` only if every check passes, and the page shows "Verified" only in that case. The check IDs are `github_lookup`, `repo_clones`, `installs`, `builds`, `demo_loads` and `readme_matches`. `mock` is always `false` now that every check is real. `log`, when present, holds the last 20 lines of a sandbox command's output.
+`verdict` is `pass` only if `github_lookup`, `repo_clones`, `installs`, `builds` and `demo_loads` all pass, and the page shows "Verified" only in that case. `readme_matches` also appears in `checks`, with `"advisory": true` and a `status` of `pass` or `warning`, but it doesn't affect `verdict`. `mock` is always `false` now that every check is real. `log`, when present, holds the last 20 lines of a sandbox command's output.
 
 Invalid input returns a `400` with `{ "error": "..." }`. If Docker isn't available, the API returns a `503` with an error starting `Sandbox unavailable:` and no check results.
 
@@ -120,14 +120,14 @@ The check sends a `GET` to the demo URL and passes only if the final status is 2
 
 ## How `readme_matches` works
 
-This is a keyword-based heuristic, and the check's label and detail say so. It passes if at least 40% of the README's key terms appear on the demo page, and the detail lists the matched and missing terms.
+This is an advisory keyword-based heuristic, and the check's label and detail say so. It shows `pass` if at least 40% of the README's key terms appear on the demo page and `warning` otherwise, and the detail lists the matched and missing terms. It never fails the verification.
 
-- Key terms come from the README's headings, bold text, list items under a features-style heading, and code-formatted names. Up to 30 are compared.
+- Key terms come from the README's headings, list items under a features-style heading, bold text and code-formatted names. Up to 30 are compared, chosen in that order, so bold text and code names only fill slots that headings and feature items leave free.
 - Common section titles such as "Installation" and code that wouldn't appear on a website, such as commands, file names and environment variables, are ignored.
 - A term matches if all of its words appear on the page, in any order and ignoring case. Common words such as "the" don't need to match.
 - The demo page is requested separately from `demo_loads`, with the same address blocking on every redirect and its own 10 second limit. Only the first 2 MB of HTML is read.
-- The check fails if there's no README, if no key terms are found, or if the demo page can't be read as HTML.
-- JavaScript isn't run, so a page that renders all of its content in the browser will usually fail. When the HTML has very little text, the detail says so. A page can also pass just by mentioning the right words.
+- The check shows a warning if there's no README, if no key terms are found, or if the demo page can't be read as HTML.
+- JavaScript isn't run, so a page that renders all of its content in the browser will usually get a warning. When the HTML has very little text, the detail says so. A page can also pass just by mentioning the right words.
 
 ## Project layout
 

@@ -167,6 +167,8 @@ function extractTerms(readme: string): Term[] {
     }
   }
 
+  // Highest priority first, because only the first MAX_TERMS are kept. Bold text
+  // and code names only get the slots that headings and feature items leave free.
   const terms = new Map<string, Term>();
   for (const candidate of [...headings, ...features, ...bold, ...code]) {
     const display = cleanEdges(candidate);
@@ -258,24 +260,25 @@ export function checkReadmeMatches(
   readme: string | null,
   page: DemoPage,
 ): Check {
-  const result = (status: Check["status"], detail: string): Check => ({
+  const result = (status: "pass" | "warning", detail: string): Check => ({
     id: "readme_matches",
-    label: "README matches (keyword heuristic)",
+    label: "README matches (advisory keyword heuristic)",
     mock: false,
+    advisory: true,
     status,
-    detail: `Keyword-based heuristic, not a perfect check. ${detail}`,
+    detail: `Advisory keyword-based heuristic, not a perfect check. It doesn't affect the verdict. ${detail}`,
   });
 
   if (readme === null) {
-    return result("fail", "GitHub didn't provide a README to compare.");
+    return result("warning", "GitHub didn't provide a README to compare.");
   }
   if ("error" in page) {
-    return result("fail", `Couldn't read the demo page. ${page.error}`);
+    return result("warning", `Couldn't read the demo page. ${page.error}`);
   }
 
   const terms = extractTerms(readme);
   if (terms.length === 0) {
-    return result("fail", "Found no key terms in the README to compare.");
+    return result("warning", "Found no key terms in the README to compare.");
   }
 
   const pageWords = new Set(wordsIn(htmlText(page.html)));
@@ -294,7 +297,7 @@ export function checkReadmeMatches(
       : "";
 
   return result(
-    passed ? "pass" : "fail",
+    passed ? "pass" : "warning",
     `${matched.length} of ${terms.length} README terms found on the demo page (${percent}%, needs ${MATCH_THRESHOLD_PERCENT}%).` +
       ` Matched: ${matched.join(", ") || "none"}.` +
       ` Missing: ${missing.join(", ") || "none"}.${thinPageNote}`,
