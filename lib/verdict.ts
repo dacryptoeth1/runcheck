@@ -1,4 +1,5 @@
 export type CheckId =
+  | "github_lookup"
   | "repo_clones"
   | "installs"
   | "builds"
@@ -14,6 +15,8 @@ export type Check = {
   mock: boolean;
   status: Status;
   detail: string;
+  /** Last 20 lines of command output, for checks that ran in the sandbox. */
+  log?: string;
 };
 
 export type Verdict = {

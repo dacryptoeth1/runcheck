@@ -67,7 +67,7 @@ export default function Home() {
           />
         </label>
         <button type="submit" disabled={loading}>
-          {loading ? "Verifying…" : "Verify project"}
+          {loading ? "Verifying… this can take several minutes" : "Verify project"}
         </button>
       </form>
 
@@ -94,7 +94,7 @@ export default function Home() {
                   key={check.id}
                   className={`${styles.check} ${styles[check.status]}`}
                 >
-                  <div>
+                  <div className={styles.checkBody}>
                     <h3>
                       {check.label}
                       {check.mock && (
@@ -102,6 +102,15 @@ export default function Home() {
                       )}
                     </h3>
                     <p>{check.detail}</p>
+                    {check.log && (
+                      <details
+                        className={styles.log}
+                        open={check.status === "fail"}
+                      >
+                        <summary>Log (last 20 lines)</summary>
+                        <pre>{check.log}</pre>
+                      </details>
+                    )}
                   </div>
                   <span className={styles.badge}>
                     {check.status === "pass" ? "Pass" : "Fail"}

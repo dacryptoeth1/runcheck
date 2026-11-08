@@ -1,25 +1,9 @@
 import { checkDemoLoads, demoUrlError } from "@/lib/demoCheck";
 import { checkRepo, parseGitHubRepo } from "@/lib/repoCheck";
+import { runSandboxChecks, SandboxUnavailableError } from "@/lib/sandboxCheck";
 import type { Check, Verdict, VerifyError } from "@/lib/verdict";
 
-// Fixed sample data until these checks run for real.
-const MOCK_BUILD_CHECKS: Check[] = [
-  {
-    id: "installs",
-    label: "Dependencies install",
-    mock: true,
-    status: "pass",
-    detail: "Dependencies installed.",
-  },
-  {
-    id: "builds",
-    label: "Project builds",
-    mock: true,
-    status: "pass",
-    detail: "Build finished without errors.",
-  },
-];
-
+// Fixed sample data until this check runs for real.
 const MOCK_README_CHECK: Check = {
   id: "readme_matches",
   label: "README matches",
@@ -68,24 +52,36 @@ export async function POST(request: Request) {
 
   // repoResult.readme holds the README text for the real readme_matches check.
   // It stays on the server and isn't included in the response.
-  const [repoResult, demoCheck] = await Promise.all([
-    checkRepo(repo),
-    checkDemoLoads(demoUrl),
-  ]);
+  try {
+    const [repoResult, sandboxChecks, demoCheck] = await Promise.all([
+      checkRepo(repo),
+      runSandboxChecks(repo),
+      checkDemoLoads(demoUrl),
+    ]);
 
-  const checks: Check[] = [
-    repoResult.check,
-    ...MOCK_BUILD_CHECKS,
-    demoCheck,
-    MOCK_README_CHECK,
-  ];
+    const checks: Check[] = [
+      repoResult.check,
+      ...sandboxChecks,
+      demoCheck,
+      MOCK_README_CHECK,
+    ];
 
-  const result: Verdict = {
-    verdict: checks.every((check) => check.status === "pass") ? "pass" : "fail",
-    repoUrl: repoUrl.href,
-    demoUrl: demoUrl.href,
-    checks,
-  };
+    const result: Verdict = {
+      verdict: checks.every((check) => check.status === "pass")
+        ? "pass"
+        : "fail",
+      repoUrl: repoUrl.href,
+      demoUrl: demoUrl.href,
+      checks,
+    };
 
-  return Response.json(result);
+    return Response.json(result);
+  } catch (error) {
+    if (error instanceof SandboxUnavailableError) {
+      return Response.json({ error: error.message } satisfies VerifyError, {
+        status: 503,
+      });
+    }
+    throw error;
+  }
 }

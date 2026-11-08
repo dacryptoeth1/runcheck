@@ -128,6 +128,32 @@
   color: var(--muted);
 }
 
+.checkBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.log {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.log summary {
+  cursor: pointer;
+}
+
+.log pre {
+  margin-top: 6px;
+  padding: 8px 10px;
+  overflow-x: auto;
+  font-size: 12px;
+  line-height: 1.5;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
 .sampleTag {
   padding: 1px 7px;
   font-size: 12px;

@@ -104,8 +104,8 @@ export async function checkRepo(repo: GitHubRepo): Promise<RepoCheckResult> {
     readme: string | null = null,
   ): RepoCheckResult => ({
     check: {
-      id: "repo_clones",
-      label: "Repo clones",
+      id: "github_lookup",
+      label: "GitHub lookup",
       mock: false,
       status,
       detail,
@@ -131,7 +131,7 @@ export async function checkRepo(repo: GitHubRepo): Promise<RepoCheckResult> {
     const { readme, note } = await fetchReadme(repo, signal);
     return result(
       "pass",
-      `Public repo, not cloned yet. Default branch: ${data.default_branch}. Last push: ${lastPush}.${note}`,
+      `Public repo. Default branch: ${data.default_branch}. Last push: ${lastPush}.${note}`,
       readme,
     );
   } catch {

@@ -2,11 +2,13 @@
 
 Check that a hackathon project runs and matches its demo. Enter a GitHub repo URL and a demo URL to get a pass/fail result for each check.
 
-> **Only `repo_clones` and `demo_loads` are real so far.** `repo_clones` looks the repo up through the GitHub API, and `demo_loads` requests the demo URL. The other three checks return fixed sample results for every project and are labeled "Sample data". Nothing is cloned or built yet.
+> **Only `readme_matches` is still sample data.** It returns a fixed result for every project and is labeled "Sample data". Every other check is real.
 
 ## Run it
 
-You need Node.js 20.9 or later.
+You need Node.js 20.9 or later, and Docker for the `repo_clones`, `installs` and `builds` checks. The user running the server must be able to run `docker`. Without Docker, `POST /api/verify` returns a `503`.
+
+The first verification pulls `node:22-bookworm`, so it takes longer than later ones. To pull it ahead of time, run `docker pull node:22-bookworm`.
 
 ```bash
 npm install
@@ -46,30 +48,51 @@ The response looks like this (`checks` is shortened to two entries):
   "demoUrl": "https://nextjs.org/",
   "checks": [
     {
+      "id": "github_lookup",
+      "label": "GitHub lookup",
+      "mock": false,
+      "status": "pass",
+      "detail": "Public repo. Default branch: canary. Last push: 2026-11-04."
+    },
+    {
       "id": "repo_clones",
       "label": "Repo clones",
       "mock": false,
       "status": "pass",
-      "detail": "Public repo, not cloned yet. Default branch: canary. Last push: 2026-11-04."
-    },
-    {
-      "id": "installs",
-      "label": "Dependencies install",
-      "mock": true,
-      "status": "pass",
-      "detail": "Dependencies installed."
+      "detail": "git clone finished without errors.",
+      "log": "Cloning into '/home/node/app'..."
     }
   ]
 }
 ```
 
-`verdict` is `pass` only if every check passes, including the sample ones. The check IDs are `repo_clones`, `installs`, `builds`, `demo_loads` and `readme_matches`. `mock` is `true` for sample results.
+`verdict` is `pass` only if every check passes, including the sample one. The check IDs are `github_lookup`, `repo_clones`, `installs`, `builds`, `demo_loads` and `readme_matches`. `mock` is `true` for sample results. `log`, when present, holds the last 20 lines of a sandbox command's output.
 
-Invalid input returns a `400` with `{ "error": "..." }`.
+Invalid input returns a `400` with `{ "error": "..." }`. If Docker isn't available, the API returns a `503` with an error starting `Sandbox unavailable:` and no check results.
 
-## How `repo_clones` works
+A verification can take several minutes, and the request stays open until it finishes. If the server is behind a reverse proxy, raise the proxy's response timeout to at least 8 minutes.
 
-The check calls `GET https://api.github.com/repos/{owner}/{repo}` and passes if the repo exists and is public. It doesn't run `git clone` yet.
+## How `repo_clones`, `installs` and `builds` work
+
+Each verification starts one throwaway `node:22-bookworm` container and runs these steps in it:
+
+| Step | Check | Time limit |
+| --- | --- | --- |
+| `git clone --depth 1` | `repo_clones` | 60 seconds |
+| `npm install`, or `pnpm install` / `yarn install` if `pnpm-lock.yaml` / `yarn.lock` exists | `installs` | 180 seconds |
+| The `build` script from `package.json` | `builds` | 180 seconds |
+
+- If a step fails or times out, the later steps are skipped and reported as failed. A step that times out kills the container.
+- A project with no `build` script passes `builds`, and the detail says there was nothing to build.
+- A repo with no `package.json` at its root fails `installs`.
+- The container runs as the non-root `node` user with `--rm`, a unique name, `--memory=1g`, `--cpus=1`, `--pids-limit=256`, `--cap-drop=ALL` and `--security-opt no-new-privileges`. No host folders or Docker socket are mounted, and no server environment variables are passed in.
+- The container stops itself after about 8 minutes, even if the server crashes.
+
+**The container has network access**, because cloning and installing need it. Repo code that runs during install or build can reach whatever the Docker host's network can. Docker has no flag for this, so on a server with private neighbors or a cloud metadata service, block those addresses from the Docker bridge with firewall rules. There's also no disk quota and no limit on concurrent verifications.
+
+## How `github_lookup` works
+
+The check calls `GET https://api.github.com/repos/{owner}/{repo}` and passes if the repo exists and is public.
 
 - The check has a 10 second limit, which covers both the repo and README requests.
 - It fails with a specific message if the repo is not found or private, if GitHub's rate limit is reached, or if GitHub can't be reached.
@@ -91,7 +114,8 @@ The check sends a `GET` to the demo URL and passes only if the final status is 2
 | Path | Purpose |
 | --- | --- |
 | `app/page.tsx` | Form and result cards |
-| `app/api/verify/route.ts` | Input validation and mock results |
-| `lib/repoCheck.ts` | Real `repo_clones` check and README fetch |
+| `app/api/verify/route.ts` | Input validation and combining check results |
+| `lib/repoCheck.ts` | Real `github_lookup` check and README fetch |
+| `lib/sandboxCheck.ts` | Real `repo_clones`, `installs` and `builds` checks in Docker |
 | `lib/demoCheck.ts` | Real `demo_loads` check and address blocking |
 | `lib/verdict.ts` | Types shared by the page and the API |
