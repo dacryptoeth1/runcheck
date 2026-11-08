@@ -1,4 +1,5 @@
 import { checkDemoLoads, demoUrlError } from "@/lib/demoCheck";
+import { admitVerification } from "@/lib/limits";
 import { checkRepo, parseGitHubRepo } from "@/lib/repoCheck";
 import { runSandboxChecks, SandboxUnavailableError } from "@/lib/sandboxCheck";
 import type { Check, Verdict, VerifyError } from "@/lib/verdict";
@@ -50,6 +51,16 @@ export async function POST(request: Request) {
     return badRequest(demoError);
   }
 
+  // server.mjs overwrites this header with the socket address.
+  const clientIp = request.headers.get("x-forwarded-for") ?? "unknown";
+  const admission = admitVerification(clientIp);
+  if (!admission.admitted) {
+    return Response.json({ error: admission.error } satisfies VerifyError, {
+      status: admission.status,
+      headers: { "Retry-After": String(admission.retryAfterSeconds) },
+    });
+  }
+
   // repoResult.readme holds the README text for the real readme_matches check.
   // It stays on the server and isn't included in the response.
   try {
@@ -78,10 +89,13 @@ export async function POST(request: Request) {
     return Response.json(result);
   } catch (error) {
     if (error instanceof SandboxUnavailableError) {
+      admission.refund();
       return Response.json({ error: error.message } satisfies VerifyError, {
         status: 503,
       });
     }
     throw error;
+  } finally {
+    admission.release();
   }
 }

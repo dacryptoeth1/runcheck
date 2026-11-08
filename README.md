@@ -17,7 +17,7 @@ npm run dev
 
 Then open [http://localhost:3000](http://localhost:3000).
 
-For a production build, run `npm run build`, then `npm start`.
+For a production build, run `npm run build`, then `npm start`. To deploy to a server, follow [DEPLOY.md](DEPLOY.md).
 
 ### Optional: GitHub token
 
@@ -70,6 +70,13 @@ The response looks like this (`checks` is shortened to two entries):
 
 Invalid input returns a `400` with `{ "error": "..." }`. If Docker isn't available, the API returns a `503` with an error starting `Sandbox unavailable:` and no check results.
 
+Two limits apply, and both responses include a `Retry-After` header:
+
+- Only 2 verifications run at once. Extra requests get a `503` saying runcheck is busy. They aren't queued.
+- Each IP address can start 5 verifications per hour. Further requests get a `429`. Rejected requests and `Sandbox unavailable` errors don't count toward the 5.
+
+The limits are held in memory, so they reset when the server restarts, and the server must run as a single process.
+
 A verification can take several minutes, and the request stays open until it finishes. If the server is behind a reverse proxy, raise the proxy's response timeout to at least 8 minutes.
 
 ## How `repo_clones`, `installs` and `builds` work
@@ -86,9 +93,11 @@ Each verification starts one throwaway `node:22-bookworm` container and runs the
 - A project with no `build` script passes `builds`, and the detail says there was nothing to build.
 - A repo with no `package.json` at its root fails `installs`.
 - The container runs as the non-root `node` user with `--rm`, a unique name, `--memory=1g`, `--cpus=1`, `--pids-limit=256`, `--cap-drop=ALL` and `--security-opt no-new-privileges`. No host folders or Docker socket are mounted, and no server environment variables are passed in.
+- The container's filesystem is read-only. It can only write to two tmpfs mounts: `/home/node` (768 MB, which holds the clone, `node_modules` and package caches) and `/tmp` (128 MB). Nothing it writes reaches the host's disk.
+- tmpfs contents count against the 1 GB memory limit, so files and running processes share it. A large project can run out of memory during its build, and the check then reports exit code 137.
 - The container stops itself after about 8 minutes, even if the server crashes.
 
-**The container has network access**, because cloning and installing need it. Repo code that runs during install or build can reach whatever the Docker host's network can. Docker has no flag for this, so on a server with private neighbors or a cloud metadata service, block those addresses from the Docker bridge with firewall rules. There's also no disk quota and no limit on concurrent verifications.
+**The container has network access**, because cloning and installing need it. Docker has no flag to limit that to the public internet, so [DEPLOY.md](DEPLOY.md) sets up the firewall rules that block private addresses. It uses the public DNS servers `1.1.1.1` and `8.8.8.8` so that those rules don't break name lookups.
 
 ## How `github_lookup` works
 
@@ -117,5 +126,7 @@ The check sends a `GET` to the demo URL and passes only if the final status is 2
 | `app/api/verify/route.ts` | Input validation and combining check results |
 | `lib/repoCheck.ts` | Real `github_lookup` check and README fetch |
 | `lib/sandboxCheck.ts` | Real `repo_clones`, `installs` and `builds` checks in Docker |
+| `lib/limits.ts` | Concurrency limit and per-IP rate limit |
+| `server.mjs` | Production server, which records each client's real IP address |
 | `lib/demoCheck.ts` | Real `demo_loads` check and address blocking |
 | `lib/verdict.ts` | Types shared by the page and the API |

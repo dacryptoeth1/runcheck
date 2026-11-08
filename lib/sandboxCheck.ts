@@ -22,6 +22,11 @@ const CONTAINER_LIFETIME_SECONDS =
     1000 +
   60;
 
+// tmpfs contents count against the container's --memory=1g limit.
+const HOME_TMPFS_SIZE = "768m";
+const TMP_TMPFS_SIZE = "128m";
+const OOM_KILLED_EXIT_CODE = 137;
+
 const LOG_TAIL_LINES = 20;
 const MAX_LOG_LINE_CHARS = 300;
 // Untrusted builds can print without limit, so only the end of the output is kept.
@@ -157,6 +162,17 @@ async function startContainer(name: string): Promise<void> {
       "--cap-drop=ALL",
       "--security-opt",
       "no-new-privileges",
+      // Everything writable is a tmpfs, so nothing can fill the host's disk. A
+      // tmpfs on the app folder alone would leave the npm cache and the rest of
+      // the container's filesystem on disk. `exec` is needed because node_modules
+      // contains native binaries, and Docker mounts a tmpfs noexec by default.
+      "--read-only",
+      `--tmpfs=${HOME_DIR}:rw,exec,nosuid,nodev,size=${HOME_TMPFS_SIZE},uid=1000,gid=1000,mode=0755`,
+      `--tmpfs=/tmp:rw,exec,nosuid,nodev,size=${TMP_TMPFS_SIZE},mode=1777`,
+      // Public resolvers, because the firewall in DEPLOY.md blocks private
+      // addresses and many cloud hosts use a private DNS server.
+      "--dns=1.1.1.1",
+      "--dns=8.8.8.8",
       "--user=node",
       `--workdir=${HOME_DIR}`,
       "--env=GIT_TERMINAL_PROMPT=0",
@@ -237,7 +253,9 @@ async function runStage(
       stage.id,
       stage.label,
       "fail",
-      `${stage.command} failed with exit code ${result.exitCode ?? "unknown"}.`,
+      result.exitCode === OOM_KILLED_EXIT_CODE
+        ? `${stage.command} was killed (exit code ${OOM_KILLED_EXIT_CODE}), most likely because the container ran out of memory.`
+        : `${stage.command} failed with exit code ${result.exitCode ?? "unknown"}.`,
       log,
     );
   }
